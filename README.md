@@ -20,7 +20,7 @@ Most budget apps feel like basic ledgers. MintIQ focuses on **financial behavior
 
 - React Native with Expo (SDK 56)
 - TypeScript
-- SQLite (`expo-sqlite`) for local storage
+- AsyncStorage for local data (works on web, iOS, and Android)
 - React Navigation (bottom tabs + stack)
 - `react-native-gifted-charts` for visualizations
 - `expo-document-picker` / `expo-sharing` for CSV import/export
@@ -83,7 +83,11 @@ Goals can be **fixed** (until changed) or **monthly** (with carry-over options a
 # Install dependencies
 npm install
 
-# Start Expo dev server
+# Web (recommended for quick preview in browser)
+npm run web
+# Then open http://localhost:8081
+
+# Or start Expo and press w for web
 npm start
 
 # Run on iOS simulator

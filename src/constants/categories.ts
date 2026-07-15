@@ -1,6 +1,9 @@
 import { Category } from '../types';
 
-export const CATEGORY_ICONS: Record<Category, keyof typeof import('@expo/vector-icons').Ionicons.glyphMap> = {
+export const CATEGORY_ICONS: Record<
+  Category,
+  keyof typeof import('@expo/vector-icons').Ionicons.glyphMap
+> = {
   Food: 'restaurant-outline',
   Transportation: 'car-outline',
   Shopping: 'bag-outline',
@@ -15,17 +18,18 @@ export const CATEGORY_ICONS: Record<Category, keyof typeof import('@expo/vector-
   Other: 'ellipsis-horizontal-outline',
 };
 
+/** Quieter category tints for Verdant Signal */
 export const CATEGORY_COLORS: Record<Category, string> = {
-  Food: '#FF7675',
-  Transportation: '#74B9FF',
-  Shopping: '#A29BFE',
-  Bills: '#636E72',
-  Entertainment: '#FD79A8',
-  Health: '#55EFC4',
-  Education: '#FFEAA7',
-  'Rent/Housing': '#81ECEC',
-  Travel: '#FAB1A0',
-  Savings: '#00B894',
-  Debt: '#E17055',
-  Other: '#B2BEC3',
+  Food: '#E07A6E',
+  Transportation: '#6BA3C9',
+  Shopping: '#9B8EC4',
+  Bills: '#8A938E',
+  Entertainment: '#D489A8',
+  Health: '#5FBF9E',
+  Education: '#C4B07A',
+  'Rent/Housing': '#6BB3B0',
+  Travel: '#D4A08A',
+  Savings: '#2EE6A6',
+  Debt: '#E86A54',
+  Other: '#7A847C',
 };

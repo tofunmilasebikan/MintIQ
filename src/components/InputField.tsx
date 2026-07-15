@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, fonts, radius, spacing, typography } from '../constants/theme';
 
 interface InputFieldProps {
   label: string;
@@ -9,6 +9,7 @@ interface InputFieldProps {
   placeholder?: string;
   keyboardType?: 'default' | 'decimal-pad' | 'numeric';
   multiline?: boolean;
+  tone?: 'ink' | 'paper';
 }
 
 export function InputField({
@@ -18,16 +19,39 @@ export function InputField({
   placeholder,
   keyboardType = 'default',
   multiline,
+  tone = 'ink',
 }: InputFieldProps) {
+  const isPaper = tone === 'paper';
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text
+        style={[
+          styles.label,
+          { color: isPaper ? colors.textOnPaperMuted : colors.textMuted },
+        ]}
+      >
+        {label}
+      </Text>
       <TextInput
-        style={[styles.input, multiline && styles.multiline]}
+        style={[
+          styles.input,
+          multiline && styles.multiline,
+          isPaper
+            ? {
+                backgroundColor: colors.surfacePaper,
+                borderColor: colors.borderPaper,
+                color: colors.textOnPaper,
+              }
+            : {
+                backgroundColor: colors.surfaceMist,
+                borderColor: colors.border,
+                color: colors.textPrimary,
+              },
+        ]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.charcoalLight}
+        placeholderTextColor={isPaper ? colors.textOnPaperMuted : colors.textMuted}
         keyboardType={keyboardType}
         multiline={multiline}
       />
@@ -37,16 +61,17 @@ export function InputField({
 
 const styles = StyleSheet.create({
   container: { marginBottom: spacing.md },
-  label: { ...typography.label, marginBottom: spacing.xs, textTransform: 'uppercase' },
+  label: {
+    ...typography.label,
+    marginBottom: spacing.xs,
+  },
   input: {
-    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 4,
     fontSize: 16,
-    color: colors.charcoal,
+    fontFamily: fonts.sans,
   },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
 });

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -17,7 +16,8 @@ import { InputField } from '../components/InputField';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { Button } from '../components/Button';
 import { Category } from '../types';
-import { colors, spacing, typography } from '../constants/theme';
+import { showAlert } from '../utils/confirm';
+import { colors, fonts, spacing, typography, radius } from '../constants/theme';
 
 interface AddExpenseScreenProps {
   onClose: () => void;
@@ -36,7 +36,7 @@ export function AddExpenseScreen({ onClose }: AddExpenseScreenProps) {
   const handleSave = async () => {
     const parsed = parseFloat(amount);
     if (isNaN(parsed) || parsed <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+      showAlert('Invalid Amount', 'Please enter a valid amount.');
       return;
     }
     setLoading(true);
@@ -48,9 +48,9 @@ export function AddExpenseScreen({ onClose }: AddExpenseScreenProps) {
         merchant: merchant.trim() || null,
         note: note.trim() || null,
       });
-      Alert.alert('Saved', 'Expense added successfully.', [{ text: 'OK', onPress: onClose }]);
+      showAlert('Saved', 'Expense added successfully.', onClose);
     } catch {
-      Alert.alert('Error', 'Could not save expense.');
+      showAlert('Error', 'Could not save expense.');
     } finally {
       setLoading(false);
     }
@@ -62,12 +62,19 @@ export function AddExpenseScreen({ onClose }: AddExpenseScreenProps) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Add Expense</Text>
-        <TouchableOpacity onPress={onClose} hitSlop={12}>
-          <Ionicons name="close" size={28} color={colors.charcoal} />
+        <View>
+          <Text style={styles.kicker}>New entry</Text>
+          <Text style={styles.title}>Add Expense</Text>
+        </View>
+        <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.closeBtn}>
+          <Ionicons name="close" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
-      <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.body}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <InputField
           label="Amount"
           value={amount}
@@ -96,24 +103,48 @@ export function AddExpenseScreen({ onClose }: AddExpenseScreenProps) {
           placeholder="Morning coffee"
           multiline
         />
-        <Button title="Save Expense" onPress={handleSave} loading={loading} style={{ marginTop: spacing.md }} />
+        <Button
+          title="Save Expense"
+          onPress={handleSave}
+          loading={loading}
+          style={{ marginTop: spacing.md }}
+        />
+        <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
+  container: { flex: 1, backgroundColor: colors.surfaceInk },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  title: { ...typography.heading },
+  kicker: {
+    ...typography.label,
+    color: colors.signal,
+    marginBottom: 2,
+  },
+  title: {
+    fontFamily: fonts.sansBold,
+    fontSize: 22,
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMist,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   body: { padding: spacing.md },
-  label: { ...typography.label, marginBottom: spacing.xs, textTransform: 'uppercase' },
+  label: { ...typography.label, marginBottom: spacing.xs },
 });

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,8 +18,9 @@ import { ImportReviewItem } from '../types';
 import { Category } from '../types';
 import { getImportSummary } from '../utils/csvImport';
 import { formatCurrency } from '../utils/format';
-import { colors, spacing, typography, radius } from '../constants/theme';
+import { colors, fonts, spacing, typography, radius } from '../constants/theme';
 import { RootStackParamList } from '../navigation/types';
+import { showAlert } from '../utils/confirm';
 
 export function ImportReviewScreen() {
   const insets = useSafeAreaInsets();
@@ -39,12 +39,12 @@ export function ImportReviewScreen() {
   const handleConfirm = async () => {
     const toImport = items.filter((i) => i.isValid && i.action === 'keep');
     if (toImport.length === 0) {
-      Alert.alert('Nothing to Import', 'No valid transactions selected.');
+      showAlert('Nothing to Import', 'No valid transactions selected.');
       return;
     }
     setLoading(true);
     try {
-      await addExpensesBatch(
+      const added = await addExpensesBatch(
         toImport.map((i) => ({
           amount: i.amount!,
           category: i.category!,
@@ -53,11 +53,14 @@ export function ImportReviewScreen() {
           note: i.note,
         }))
       );
-      Alert.alert('Import Complete', `${toImport.length} transactions imported.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      const skipped = toImport.length - added;
+      const message =
+        skipped > 0
+          ? `${added} imported. ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped.`
+          : `${added} transaction${added === 1 ? '' : 's'} imported.`;
+      showAlert('Import Complete', message, () => navigation.goBack());
     } catch {
-      Alert.alert('Import Failed', 'Could not save transactions.');
+      showAlert('Import Failed', 'Could not save transactions.');
     } finally {
       setLoading(false);
     }
@@ -66,23 +69,30 @@ export function ImportReviewScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.charcoal} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Review Import</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.headerText}>
+          <Text style={styles.kicker}>CSV / PDF</Text>
+          <Text style={styles.title}>Review Import</Text>
+        </View>
+        <View style={{ width: 36 }} />
       </View>
 
       <View style={styles.summaryRow}>
         <SummaryBadge label="Valid" count={summary.valid} color={colors.success} />
         <SummaryBadge label="Invalid" count={summary.invalid} color={colors.error} />
         <SummaryBadge label="Duplicates" count={summary.duplicates} color={colors.warning} />
-        <SummaryBadge label="Inferred" count={summary.inferred} color={colors.mintDark} />
+        <SummaryBadge label="Inferred" count={summary.inferred} color={colors.signal} />
       </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {items.map((item) => (
-          <Card key={item.id} style={StyleSheet.flatten([styles.item, !item.isValid && styles.itemInvalid])}>
+          <Card
+            key={item.id}
+            variant="mist"
+            style={StyleSheet.flatten([styles.item, !item.isValid && styles.itemInvalid])}
+          >
             <View style={styles.itemHeader}>
               <Text style={styles.itemMerchant}>{item.merchant || 'Unknown'}</Text>
               <Text style={styles.itemAmount}>
@@ -101,7 +111,9 @@ export function ImportReviewScreen() {
                 <Ionicons name="warning-outline" size={16} color={colors.warning} />
                 <Text style={styles.dupText}>Potential duplicate</Text>
                 <TouchableOpacity
-                  onPress={() => updateItem(item.id, { action: item.action === 'keep' ? 'skip' : 'keep' })}
+                  onPress={() =>
+                    updateItem(item.id, { action: item.action === 'keep' ? 'skip' : 'keep' })
+                  }
                 >
                   <Text style={styles.dupAction}>
                     {item.action === 'keep' ? 'Skip' : 'Keep'}
@@ -124,7 +136,11 @@ export function ImportReviewScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Button title={`Confirm Import (${summary.valid})`} onPress={handleConfirm} loading={loading} />
+        <Button
+          title={`Confirm Import (${summary.valid})`}
+          onPress={handleConfirm}
+          loading={loading}
+        />
       </View>
     </View>
   );
@@ -132,7 +148,7 @@ export function ImportReviewScreen() {
 
 function SummaryBadge({ label, count, color }: { label: string; count: number; color: string }) {
   return (
-    <View style={[styles.badge, { borderColor: color }]}>
+    <View style={[styles.badge, { borderColor: color + '66' }]}>
       <Text style={[styles.badgeCount, { color }]}>{count}</Text>
       <Text style={styles.badgeLabel}>{label}</Text>
     </View>
@@ -140,7 +156,7 @@ function SummaryBadge({ label, count, color }: { label: string; count: number; c
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
+  container: { flex: 1, backgroundColor: colors.surfaceInk },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -148,7 +164,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
-  title: { ...typography.heading },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMist,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: { alignItems: 'center' },
+  kicker: { ...typography.label, color: colors.signal },
+  title: {
+    fontFamily: fonts.sansBold,
+    fontSize: 18,
+    color: colors.textPrimary,
+  },
   summaryRow: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
@@ -161,34 +191,49 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMist,
   },
-  badgeCount: { fontSize: 18, fontWeight: '700' },
-  badgeLabel: { ...typography.label, fontSize: 10 },
+  badgeCount: {
+    fontFamily: fonts.sansBold,
+    fontSize: 18,
+  },
+  badgeLabel: { ...typography.label, fontSize: 9, marginTop: 2 },
   list: { flex: 1, paddingHorizontal: spacing.md },
   item: { marginBottom: spacing.sm },
-  itemInvalid: { opacity: 0.7, borderColor: colors.error },
+  itemInvalid: { opacity: 0.7, borderWidth: 1, borderColor: colors.error },
   itemHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  itemMerchant: { ...typography.subheading, fontSize: 15 },
-  itemAmount: { ...typography.subheading, color: colors.mintDark },
+  itemMerchant: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  itemAmount: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.signal,
+  },
   itemMeta: { ...typography.caption, marginTop: 4 },
   errorText: { ...typography.caption, color: colors.error, marginTop: 4 },
   dupBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.warning + '20',
+    backgroundColor: 'rgba(232, 196, 106, 0.15)',
     padding: spacing.sm,
     borderRadius: radius.sm,
     marginTop: spacing.sm,
     gap: spacing.xs,
   },
-  dupText: { ...typography.caption, flex: 1, color: colors.charcoal },
-  dupAction: { ...typography.caption, color: colors.mintDark, fontWeight: '600' },
-  catLabel: { ...typography.label, marginTop: spacing.sm, textTransform: 'uppercase' },
+  dupText: { ...typography.caption, flex: 1, color: colors.textPrimary },
+  dupAction: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.signal,
+  },
+  catLabel: { ...typography.label, marginTop: spacing.sm },
   footer: {
     padding: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMist,
   },
 });

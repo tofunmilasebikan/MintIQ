@@ -2,8 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Insight } from '../utils/insights';
-import { Card } from './Card';
-import { colors, spacing, typography } from '../constants/theme';
+import { colors, spacing, typography, radius } from '../constants/theme';
 
 const ICONS: Record<Insight['type'], keyof typeof Ionicons.glyphMap> = {
   category: 'pie-chart-outline',
@@ -18,28 +17,41 @@ interface InsightCardProps {
 
 export function InsightCard({ insight }: InsightCardProps) {
   return (
-    <Card style={styles.card}>
+    <View style={styles.card}>
       <View style={styles.row}>
         <View style={styles.iconWrap}>
-          <Ionicons name={ICONS[insight.type]} size={20} color={colors.mintDark} />
+          <Ionicons name={ICONS[insight.type]} size={18} color={colors.signal} />
         </View>
         <Text style={styles.text}>{insight.text}</Text>
       </View>
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { marginBottom: spacing.sm },
+  card: {
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceMist,
+    borderRadius: radius.lg,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.signal,
+  },
   row: { flexDirection: 'row', alignItems: 'flex-start' },
   iconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.mintLight,
+    borderRadius: radius.md,
+    backgroundColor: colors.signalSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm + 4,
   },
-  text: { ...typography.body, flex: 1, lineHeight: 22 },
+  text: {
+    ...typography.body,
+    flex: 1,
+    lineHeight: 22,
+    color: colors.textSecondary,
+  },
 });

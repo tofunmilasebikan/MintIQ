@@ -1,38 +1,43 @@
-import * as SQLite from 'expo-sqlite';
 import {
-  initDatabase,
+  initStorage,
   getSetting,
   setSetting,
   insertExpensesBatch,
   insertGoal,
-} from './db';
+  dedupeStoredExpenses,
+} from './storage';
 import { generateSampleExpenses, generateSampleGoals } from '../data/sampleExpenses';
 
-let dbInstance: SQLite.SQLiteDatabase | null = null;
+let initialized = false;
 
-export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (dbInstance) return dbInstance;
-  dbInstance = await SQLite.openDatabaseAsync('mintiq.db');
-  await initDatabase(dbInstance);
-  await seedIfNeeded(dbInstance);
-  return dbInstance;
+export async function initializeAppStorage(): Promise<void> {
+  if (initialized) return;
+  await initStorage();
+  await seedIfNeeded();
+  await runMaintenance();
+  initialized = true;
 }
 
-async function seedIfNeeded(db: SQLite.SQLiteDatabase): Promise<void> {
-  const seeded = await getSetting(db, 'hasSeeded');
+async function runMaintenance(): Promise<void> {
+  const deduped = await getSetting('dedupeV1');
+  if (deduped === 'true') return;
+  await dedupeStoredExpenses();
+  await setSetting('dedupeV1', 'true');
+}
+
+async function seedIfNeeded(): Promise<void> {
+  const seeded = await getSetting('hasSeeded');
   if (seeded === 'true') return;
 
   const expenses = generateSampleExpenses();
-  await insertExpensesBatch(db, expenses);
+  await insertExpensesBatch(expenses);
 
   const goals = generateSampleGoals();
   for (const goal of goals) {
-    await insertGoal(db, goal);
+    await insertGoal(goal);
   }
 
-  await setSetting(db, 'hasSeeded', 'true');
+  await setSetting('hasSeeded', 'true');
 }
 
-export function closeDatabase(): void {
-  dbInstance = null;
-}
+export * from './storage';

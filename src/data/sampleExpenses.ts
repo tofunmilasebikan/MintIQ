@@ -72,7 +72,7 @@ export function generateSampleGoals(): GoalInput[] {
       month,
       status: 'active',
       recurrence: 'fixed',
-      linkSavingsTransactions: true,
+      linkSavingsTransactions: false,
     },
     {
       name: 'Reduce Shopping',

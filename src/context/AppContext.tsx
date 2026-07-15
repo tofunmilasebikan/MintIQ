@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import * as SQLite from 'expo-sqlite';
-import { getDatabase } from '../database';
+import { initializeAppStorage } from '../database';
 import { Expense, Goal } from '../types';
 import {
   getAllExpenses,
@@ -11,91 +10,84 @@ import {
   updateGoal,
   deleteGoal,
   insertExpensesBatch,
-} from '../database/db';
+} from '../database/storage';
 import { ExpenseInput, GoalInput } from '../types';
 
 interface AppContextValue {
-  db: SQLite.SQLiteDatabase | null;
   ready: boolean;
   expenses: Expense[];
   goals: Goal[];
   refresh: () => Promise<void>;
   addExpense: (expense: ExpenseInput) => Promise<void>;
   removeExpense: (id: number) => Promise<void>;
-  addExpensesBatch: (items: ExpenseInput[]) => Promise<void>;
+  addExpensesBatch: (items: ExpenseInput[]) => Promise<number>;
   addGoal: (goal: GoalInput) => Promise<void>;
   editGoal: (id: number, updates: Partial<GoalInput>) => Promise<void>;
   removeGoal: (id: number) => Promise<void>;
+  removeGoals: (ids: number[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [ready, setReady] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
 
   const refresh = useCallback(async () => {
-    if (!db) return;
-    const [e, g] = await Promise.all([getAllExpenses(db), getAllGoals(db)]);
+    const [e, g] = await Promise.all([getAllExpenses(), getAllGoals()]);
     setExpenses(e);
     setGoals(g);
-  }, [db]);
-
-  useEffect(() => {
-    getDatabase().then(async (database) => {
-      setDb(database);
-      const [e, g] = await Promise.all([
-        getAllExpenses(database),
-        getAllGoals(database),
-      ]);
-      setExpenses(e);
-      setGoals(g);
-      setReady(true);
-    });
   }, []);
 
+  useEffect(() => {
+    initializeAppStorage().then(async () => {
+      await refresh();
+      setReady(true);
+    });
+  }, [refresh]);
+
   const addExpense = async (expense: ExpenseInput) => {
-    if (!db) return;
-    await insertExpense(db, expense);
+    await insertExpense(expense);
     await refresh();
   };
 
   const removeExpense = async (id: number) => {
-    if (!db) return;
-    await deleteExpense(db, id);
+    await deleteExpense(id);
     await refresh();
   };
 
   const addExpensesBatch = async (items: ExpenseInput[]) => {
-    if (!db) return;
-    await insertExpensesBatch(db, items);
+    const added = await insertExpensesBatch(items);
     await refresh();
+    return added;
   };
 
   const addGoal = async (goal: GoalInput) => {
-    if (!db) return;
-    await insertGoal(db, goal);
+    await insertGoal(goal);
     await refresh();
   };
 
   const editGoal = async (id: number, updates: Partial<GoalInput>) => {
-    if (!db) return;
-    await updateGoal(db, id, updates);
+    await updateGoal(id, updates);
     await refresh();
   };
 
   const removeGoal = async (id: number) => {
-    if (!db) return;
-    await deleteGoal(db, id);
+    await deleteGoal(id);
+    await refresh();
+  };
+
+  const removeGoals = async (ids: number[]) => {
+    for (const id of ids) {
+      await deleteGoal(id);
+    }
     await refresh();
   };
 
   return (
     <AppContext.Provider
       value={{
-        db,
         ready,
         expenses,
         goals,
@@ -106,6 +98,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addGoal,
         editGoal,
         removeGoal,
+        removeGoals,
       }}
     >
       {children}

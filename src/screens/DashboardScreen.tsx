@@ -2,11 +2,10 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 import { format, subMonths } from 'date-fns';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { Card } from '../components/Card';
+import { ScoreHero } from '../components/ScoreHero';
 import { StatCard } from '../components/StatCard';
-import { ScoreRing } from '../components/ScoreRing';
 import {
   sumExpenses,
   getMonthRange,
@@ -15,18 +14,25 @@ import {
   calculateProjectedMonthlySpend,
   calculateMintIQScore,
   groupByCategory,
-  getWeeklyTrend,
   getSpendingOverTime,
 } from '../utils/analytics';
 import { formatCurrency } from '../utils/format';
 import { CATEGORY_COLORS } from '../constants/categories';
-import { colors, spacing, typography } from '../constants/theme';
+import { colors, fonts, spacing, typography, radius } from '../constants/theme';
 import { Category } from '../types';
 
 const screenWidth = Dimensions.get('window').width;
 
+function scoreMeaning(total: number): string {
+  if (total >= 80) return 'Your signal is strong — goals, stability, and pace are aligned.';
+  if (total >= 60) return 'A balanced signal with room to sharpen one or two behaviors.';
+  if (total >= 40) return 'A developing signal — trends and consistency will move this.';
+  return 'Early signal — more tracking will clarify your pattern.';
+}
+
 export function DashboardScreen() {
   const { expenses, goals } = useApp();
+  const insets = useSafeAreaInsets();
   const now = new Date();
   const monthRange = getMonthRange();
   const weekRange = getWeekRange();
@@ -61,156 +67,234 @@ export function DashboardScreen() {
     };
   }, [expenses, goals, monthRange, weekRange, prevMonthRange]);
 
-  const categoryData = useMemo(() => {
+  const categoryEntries = useMemo(() => {
     const grouped = groupByCategory(stats.monthExpenses);
     return Object.entries(grouped)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([cat, value]) => ({
-        value,
-        color: CATEGORY_COLORS[cat as Category] ?? colors.mintDark,
-        text: cat,
-      }));
+      .slice(0, 5);
   }, [stats.monthExpenses]);
 
-  const weeklyData = useMemo(
-    () => getWeeklyTrend(expenses).map((d) => ({ ...d, frontColor: colors.mintDark })),
-    [expenses]
+  const categoryData = useMemo(
+    () =>
+      categoryEntries.map(([cat, value]) => ({
+        value,
+        color: CATEGORY_COLORS[cat as Category] ?? colors.signal,
+        text: cat,
+      })),
+    [categoryEntries]
   );
 
   const dailyData = useMemo(
-    () => getSpendingOverTime(expenses, 14).map((d) => ({ ...d, frontColor: colors.mint })),
+    () =>
+      getSpendingOverTime(expenses, 14).map((d) => ({
+        value: d.value,
+        label: d.label,
+        frontColor: colors.signal,
+      })),
     [expenses]
   );
 
-  return (
-    <View style={styles.container}>
-      <ScreenHeader title="Dashboard" subtitle={format(now, 'MMMM yyyy')} />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Card style={styles.scoreCard} accent>
-          <View style={styles.scoreRow}>
-            <ScoreRing score={stats.score.total} size={90} />
-            <View style={styles.scoreInfo}>
-              <Text style={styles.scoreTitle}>MintIQ Score</Text>
-              <Text style={styles.scoreDesc}>
-                A snapshot of your financial behavior based on goals, stability, savings, and trends.
-              </Text>
-            </View>
-          </View>
-        </Card>
+  const chartWidth = Math.min(screenWidth, 480) - spacing.md * 2;
 
-        <View style={styles.statsGrid}>
-          <Card style={styles.statCardWrap}>
-            <StatCard label="This Month" value={formatCurrency(stats.monthTotal)} />
-          </Card>
-          <Card style={styles.statCardWrap}>
-            <StatCard label="This Week" value={formatCurrency(stats.weekTotal)} />
-          </Card>
-          <Card style={styles.statCardWrap}>
-            <StatCard label="Daily Avg" value={formatCurrency(stats.avgDaily)} />
-          </Card>
-          <Card style={styles.statCardWrap}>
-            <StatCard
-              label="Projected"
-              value={formatCurrency(stats.projected)}
-              subtitle="End of month"
-            />
-          </Card>
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScoreHero score={stats.score.total} meaning={scoreMeaning(stats.score.total)} />
+
+        <Text style={styles.monthLabel}>{format(now, 'MMMM yyyy')}</Text>
+
+        <View style={styles.metricRail}>
+          <StatCard label="This month" value={formatCurrency(stats.monthTotal)} index={0} />
+          <View style={styles.railDivider} />
+          <StatCard label="This week" value={formatCurrency(stats.weekTotal)} index={1} />
+          <View style={styles.railDivider} />
+          <StatCard label="Daily avg" value={formatCurrency(stats.avgDaily)} index={2} />
+          <View style={styles.railDivider} />
+          <StatCard
+            label="Projected"
+            value={formatCurrency(stats.projected)}
+            subtitle="End of month"
+            index={3}
+          />
         </View>
 
         {stats.topCategory ? (
-          <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Top Category</Text>
-            <Text style={styles.topCat}>
-              {stats.topCategory} · {formatCurrency(stats.topCategoryAmount)}
+          <View style={styles.storyBlock}>
+            <Text style={styles.kicker}>Leading category</Text>
+            <Text style={styles.storyHeadline}>{stats.topCategory}</Text>
+            <Text style={styles.storyMeta}>
+              {formatCurrency(stats.topCategoryAmount)} this month
             </Text>
-          </Card>
+          </View>
         ) : null}
 
         {categoryData.length > 0 ? (
-          <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Spending by Category</Text>
-            <View style={styles.chartCenter}>
+          <View style={styles.chartBlock}>
+            <Text style={styles.sectionLabel}>Category story</Text>
+            <View style={styles.categoryRow}>
               <PieChart
                 data={categoryData}
                 donut
-                radius={80}
-                innerRadius={50}
+                radius={72}
+                innerRadius={48}
                 centerLabelComponent={() => (
-                  <Text style={styles.pieCenter}>{formatCurrency(stats.monthTotal)}</Text>
+                  <View style={styles.pieCenter}>
+                    <Text style={styles.pieValue}>{formatCurrency(stats.monthTotal)}</Text>
+                    <Text style={styles.pieHint}>total</Text>
+                  </View>
                 )}
               />
+              <View style={styles.legend}>
+                {categoryEntries.map(([cat, value]) => (
+                  <View key={cat} style={styles.legendRow}>
+                    <View
+                      style={[
+                        styles.legendDot,
+                        { backgroundColor: CATEGORY_COLORS[cat as Category] ?? colors.signal },
+                      ]}
+                    />
+                    <Text style={styles.legendCat} numberOfLines={1}>
+                      {cat}
+                    </Text>
+                    <Text style={styles.legendVal}>{formatCurrency(value)}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </Card>
+          </View>
         ) : null}
 
         {dailyData.some((d) => d.value > 0) ? (
-          <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Spending Over Time</Text>
+          <View style={styles.chartBlock}>
+            <Text style={styles.sectionLabel}>Spending over time</Text>
+            <Text style={styles.sectionHint}>Last 14 days</Text>
             <BarChart
               data={dailyData}
-              width={screenWidth - 80}
-              height={160}
-              barWidth={14}
-              spacing={8}
+              width={chartWidth}
+              height={168}
+              barWidth={12}
+              spacing={6}
               roundedTop
               hideRules
               xAxisThickness={0}
               yAxisThickness={0}
               yAxisTextStyle={styles.axisText}
               xAxisLabelTextStyle={styles.axisText}
-              noOfSections={4}
-              maxValue={Math.max(...dailyData.map((d) => d.value), 10) * 1.2}
+              noOfSections={3}
+              maxValue={Math.max(...dailyData.map((d) => d.value), 10) * 1.15}
+              isAnimated
+              animationDuration={700}
             />
-          </Card>
+          </View>
         ) : null}
 
-        {weeklyData.some((d) => d.value > 0) ? (
-          <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Weekly Trend</Text>
-            <BarChart
-              data={weeklyData}
-              width={screenWidth - 80}
-              height={160}
-              barWidth={28}
-              spacing={16}
-              roundedTop
-              hideRules
-              xAxisThickness={0}
-              yAxisThickness={0}
-              yAxisTextStyle={styles.axisText}
-              xAxisLabelTextStyle={styles.axisText}
-              noOfSections={4}
-              maxValue={Math.max(...weeklyData.map((d) => d.value), 10) * 1.2}
-            />
-          </Card>
-        ) : null}
-
-        <View style={{ height: 100 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
-  scroll: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl },
-  scoreCard: { marginBottom: spacing.md },
-  scoreRow: { flexDirection: 'row', alignItems: 'center' },
-  scoreInfo: { flex: 1, marginLeft: spacing.md },
-  scoreTitle: { ...typography.heading },
-  scoreDesc: { ...typography.caption, marginTop: spacing.xs, lineHeight: 20 },
-  statsGrid: {
+  container: {
+    flex: 1,
+    backgroundColor: colors.surfaceInk,
+  },
+  scroll: {
+    paddingBottom: spacing.xl,
+  },
+  monthLabel: {
+    ...typography.label,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    color: colors.textMuted,
+  },
+  metricRail: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceMist,
+    borderRadius: radius.lg,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+  },
+  railDivider: {
+    width: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
+  },
+  storyBlock: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  kicker: {
+    ...typography.label,
+    marginBottom: spacing.xs,
+  },
+  storyHeadline: {
+    fontFamily: fonts.display,
+    fontSize: 36,
+    color: colors.textPrimary,
+    letterSpacing: -0.8,
+  },
+  storyMeta: {
+    ...typography.caption,
+    marginTop: spacing.xs,
+  },
+  chartBlock: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  sectionLabel: {
+    ...typography.heading,
+    marginBottom: spacing.xs,
+  },
+  sectionHint: {
+    ...typography.caption,
     marginBottom: spacing.md,
   },
-  statCardWrap: { width: '48%', flexGrow: 1 },
-  section: { marginBottom: spacing.md },
-  sectionTitle: { ...typography.subheading, marginBottom: spacing.md },
-  topCat: { ...typography.body, color: colors.mintDark, fontWeight: '600' },
-  chartCenter: { alignItems: 'center', paddingVertical: spacing.sm },
-  pieCenter: { ...typography.caption, fontWeight: '700' },
-  axisText: { ...typography.label, fontSize: 10 },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    backgroundColor: colors.surfaceMist,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  pieCenter: { alignItems: 'center' },
+  pieValue: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    color: colors.textPrimary,
+  },
+  pieHint: {
+    ...typography.label,
+    fontSize: 9,
+  },
+  legend: { flex: 1, gap: spacing.sm },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendCat: {
+    ...typography.caption,
+    flex: 1,
+    color: colors.textSecondary,
+  },
+  legendVal: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: colors.textPrimary,
+  },
+  axisText: {
+    ...typography.label,
+    fontSize: 9,
+    color: colors.textMuted,
+  },
 });

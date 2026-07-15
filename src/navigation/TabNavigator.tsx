@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet, Modal, Platform, Text } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Platform,
+  Text,
+  Animated,
+} from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { DashboardScreen } from '../screens/DashboardScreen';
@@ -8,12 +16,13 @@ import { GoalsScreen } from '../screens/GoalsScreen';
 import { InsightsScreen } from '../screens/InsightsScreen';
 import { AddExpenseScreen } from '../screens/AddExpenseScreen';
 import { TabParamList } from './types';
-import { colors, spacing, radius } from '../constants/theme';
+import { colors, fonts, spacing, radius } from '../constants/theme';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const [showAdd, setShowAdd] = useState(false);
+  const fabScale = useRef(new Animated.Value(1)).current;
 
   const tabs = [
     { name: 'Dashboard', label: 'Home', icon: 'grid-outline', activeIcon: 'grid' },
@@ -21,6 +30,23 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     { name: 'Goals', label: 'Goals', icon: 'flag-outline', activeIcon: 'flag' },
     { name: 'Insights', label: 'Insights', icon: 'bulb-outline', activeIcon: 'bulb' },
   ];
+
+  const pressFab = () => {
+    Animated.sequence([
+      Animated.timing(fabScale, {
+        toValue: 0.9,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.spring(fabScale, {
+        toValue: 1,
+        friction: 4,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    setShowAdd(true);
+  };
 
   return (
     <>
@@ -37,17 +63,21 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               <Ionicons
                 name={(isFocused ? tab.activeIcon : tab.icon) as any}
                 size={22}
-                color={isFocused ? colors.mintDark : colors.charcoalLight}
+                color={isFocused ? colors.signal : colors.textMuted}
               />
-              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>{tab.label}</Text>
+              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
 
         <View style={styles.fabSpace}>
-          <TouchableOpacity style={styles.fab} onPress={() => setShowAdd(true)} activeOpacity={0.85}>
-            <Ionicons name="add" size={32} color={colors.white} />
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: fabScale }] }}>
+            <TouchableOpacity style={styles.fab} onPress={pressFab} activeOpacity={0.9}>
+              <Ionicons name="add" size={30} color={colors.ink} />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
 
         {tabs.slice(2).map((tab, i) => {
@@ -63,9 +93,11 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               <Ionicons
                 name={(isFocused ? tab.activeIcon : tab.icon) as any}
                 size={22}
-                color={isFocused ? colors.mintDark : colors.charcoalLight}
+                color={isFocused ? colors.signal : colors.textMuted}
               />
-              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>{tab.label}</Text>
+              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -96,17 +128,16 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMist,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.sm,
+    paddingBottom:
+      Platform.OS === 'web' ? spacing.md : Platform.OS === 'ios' ? spacing.lg : spacing.sm,
+    maxWidth: Platform.OS === 'web' ? 480 : undefined,
+    alignSelf: Platform.OS === 'web' ? 'center' : undefined,
+    width: Platform.OS === 'web' ? '100%' : undefined,
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.md,
-    shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 8,
   },
   tab: {
     flex: 1,
@@ -115,14 +146,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   tabLabel: {
+    fontFamily: fonts.sansMedium,
     fontSize: 10,
-    fontWeight: '500',
-    color: colors.charcoalLight,
+    color: colors.textMuted,
     marginTop: 2,
   },
   tabLabelActive: {
-    color: colors.mintDark,
-    fontWeight: '600',
+    color: colors.signal,
+    fontFamily: fonts.sansSemiBold,
   },
   fabSpace: {
     flex: 1,
@@ -133,15 +164,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: radius.full,
-    backgroundColor: colors.mintDark,
+    backgroundColor: colors.signal,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.mintDark,
+    borderWidth: 3,
+    borderColor: colors.surfaceInk,
+    shadowColor: colors.signal,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 3,
-    borderColor: colors.white,
+    shadowRadius: 10,
+    elevation: 8,
   },
 });

@@ -1,41 +1,51 @@
-import { Goal, Expense, Category } from '../types';
-import { getMonthRange, sumExpenses } from './analytics';
+import { Goal, Expense } from '../types';
+import { getMonthRange } from './analytics';
+
+/** Category spending for the goal's month (reduce-spending goals). */
+export function getGoalCategorySpent(goal: Goal, monthExpenses: Expense[]): number {
+  if (!goal.category) return 0;
+  const { start, end } = getMonthRange(goal.month);
+  return monthExpenses
+    .filter((e) => e.category === goal.category && e.date >= start && e.date <= end)
+    .reduce((s, e) => s + e.amount, 0);
+}
+
+/** Linked Savings transactions for the goal's month only. */
+export function getLinkedSavingsTotal(goal: Goal, monthExpenses: Expense[]): number {
+  const { start, end } = getMonthRange(goal.month);
+  return monthExpenses
+    .filter((e) => e.category === 'Savings' && e.date >= start && e.date <= end)
+    .reduce((s, e) => s + e.amount, 0);
+}
 
 export function computeGoalProgress(goal: Goal, monthExpenses: Expense[]): number {
   if (goal.goalType === 'reduce_spending' && goal.category) {
-    const { start, end } = getMonthRange(goal.month);
-    const categoryTotal = monthExpenses
-      .filter((e) => e.category === goal.category && e.date >= start && e.date <= end)
-      .reduce((s, e) => s + e.amount, 0);
-    // For reduce goals, progress = how much under target (target is max allowed spend)
-    const remaining = Math.max(0, goal.targetAmount - categoryTotal);
-    return Math.min(goal.targetAmount, remaining + goal.currentAmount);
+    return getGoalCategorySpent(goal, monthExpenses);
   }
 
   if (goal.goalType === 'savings' && goal.linkSavingsTransactions) {
-    const { start, end } = getMonthRange(goal.month);
-    const savingsTotal = monthExpenses
-      .filter((e) => e.category === 'Savings' && e.date >= start && e.date <= end)
-      .reduce((s, e) => s + e.amount, 0);
-    return goal.currentAmount + savingsTotal;
+    const linked = getLinkedSavingsTotal(goal, monthExpenses);
+    return Math.min(goal.targetAmount, goal.currentAmount + linked);
   }
 
-  return goal.currentAmount;
+  return Math.min(goal.targetAmount, goal.currentAmount);
 }
 
 export function getGoalProgressPercent(goal: Goal, monthExpenses: Expense[]): number {
-  const progress = computeGoalProgress(goal, monthExpenses);
   if (goal.targetAmount <= 0) return 0;
+
+  if (goal.goalType === 'reduce_spending') {
+    const spent = getGoalCategorySpent(goal, monthExpenses);
+    return Math.min(100, (spent / goal.targetAmount) * 100);
+  }
+
+  const progress = computeGoalProgress(goal, monthExpenses);
   return Math.min(100, (progress / goal.targetAmount) * 100);
 }
 
 export function isGoalCompleted(goal: Goal, monthExpenses: Expense[]): boolean {
   if (goal.goalType === 'reduce_spending' && goal.category) {
-    const { start, end } = getMonthRange(goal.month);
-    const categoryTotal = monthExpenses
-      .filter((e) => e.category === goal.category && e.date >= start && e.date <= end)
-      .reduce((s, e) => s + e.amount, 0);
-    return categoryTotal <= goal.targetAmount;
+    return getGoalCategorySpent(goal, monthExpenses) <= goal.targetAmount;
   }
   return computeGoalProgress(goal, monthExpenses) >= goal.targetAmount;
 }
@@ -51,13 +61,13 @@ export function getGoalTypeLabel(type: Goal['goalType']): string {
   }
 }
 
-export function getDefaultCategoryForGoalType(type: Goal['goalType']): Category | null {
+export function getDefaultCategoryForGoalType(type: Goal['goalType']) {
   switch (type) {
     case 'savings':
-      return 'Savings';
+      return 'Savings' as const;
     case 'reduce_spending':
-      return 'Shopping';
+      return 'Shopping' as const;
     case 'debt':
-      return 'Debt';
+      return 'Debt' as const;
   }
 }

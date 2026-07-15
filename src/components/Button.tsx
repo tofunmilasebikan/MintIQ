@@ -6,12 +6,12 @@ import {
   ActivityIndicator,
   ViewStyle,
 } from 'react-native';
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, fonts, radius, spacing } from '../constants/theme';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'signal';
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -25,20 +25,37 @@ export function Button({
   disabled,
   style,
 }: ButtonProps) {
-  const variantStyle = styles[variant];
-  const textStyle = variant === 'ghost' ? styles.ghostText : styles.text;
+  const isSignal = variant === 'primary' || variant === 'signal';
+  const isDanger = variant === 'danger';
+  const isGhost = variant === 'ghost';
+  const isSecondary = variant === 'secondary';
+
+  const loaderColor = isSignal || isDanger ? colors.ink : colors.signal;
 
   return (
     <TouchableOpacity
-      style={[styles.base, variantStyle, (disabled || loading) && styles.disabled, style]}
+      style={[
+        styles.base,
+        styles[variant],
+        (disabled || loading) && styles.disabled,
+        style,
+      ]}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.white : colors.mintDark} />
+        <ActivityIndicator color={loaderColor} />
       ) : (
-        <Text style={textStyle}>{title}</Text>
+        <Text
+          style={[
+            styles.text,
+            (isSignal || isDanger) && styles.textOnSignal,
+            (isGhost || isSecondary) && styles.textSignal,
+          ]}
+        >
+          {title}
+        </Text>
       )}
     </TouchableOpacity>
   );
@@ -53,12 +70,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primary: {
-    backgroundColor: colors.mintDark,
+    backgroundColor: colors.signal,
+  },
+  signal: {
+    backgroundColor: colors.signal,
   },
   secondary: {
-    backgroundColor: colors.mintLight,
+    backgroundColor: colors.signalSoft,
     borderWidth: 1,
-    borderColor: colors.mint,
+    borderColor: 'rgba(46, 230, 166, 0.35)',
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -67,16 +87,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   text: {
-    ...typography.subheading,
-    color: colors.white,
+    fontFamily: fonts.sansSemiBold,
     fontSize: 15,
+    fontWeight: '600',
   },
-  ghostText: {
-    ...typography.subheading,
-    color: colors.mintDark,
-    fontSize: 15,
+  textOnSignal: {
+    color: colors.ink,
+  },
+  textSignal: {
+    color: colors.signal,
   },
 });

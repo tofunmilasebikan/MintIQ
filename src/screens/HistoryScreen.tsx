@@ -4,13 +4,10 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
   Text,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useApp } from '../context/AppContext';
@@ -22,7 +19,10 @@ import { EmptyState } from '../components/EmptyState';
 import { CATEGORIES } from '../types';
 import { expensesToCSV } from '../utils/csvExport';
 import { parseCSVContent } from '../utils/csvImport';
-import { colors, spacing, typography } from '../constants/theme';
+import { PdfImportError, parsePDFImport } from '../utils/pdfImport';
+import { exportCSV, pickImportFile } from '../utils/fileIO';
+import { showAlert } from '../utils/confirm';
+import { colors, fonts, spacing, radius } from '../constants/theme';
 import { RootStackParamList } from '../navigation/types';
 
 export function HistoryScreen() {
@@ -46,44 +46,52 @@ export function HistoryScreen() {
   const handleExport = async () => {
     try {
       const csv = expensesToCSV(expenses);
-      const path = `${FileSystem.cacheDirectory}mintiq-expenses.csv`;
-      await FileSystem.writeAsStringAsync(path, csv);
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export Expenses' });
-      } else {
-        Alert.alert('Export Ready', 'Sharing is not available on this device.');
+      await exportCSV('mintiq-expenses.csv', csv);
+      if (Platform.OS === 'web') {
+        showAlert('Exported', 'Your CSV file has been downloaded.');
       }
     } catch {
-      Alert.alert('Export Failed', 'Could not export CSV file.');
+      showAlert('Export Failed', 'Could not export CSV file.');
     }
   };
 
   const handleImport = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-      const content = await FileSystem.readAsStringAsync(result.assets[0].uri);
-      const items = parseCSVContent(content);
+      const file = await pickImportFile();
+      if (!file) return;
+
+      const items =
+        file.type === 'csv'
+          ? parseCSVContent(file.content)
+          : await parsePDFImport(file.bytes);
+
       if (items.length === 0) {
-        Alert.alert('Import Failed', 'No valid rows found in CSV.');
+        showAlert(
+          'Import Failed',
+          file.type === 'csv'
+            ? 'No valid rows found in CSV.'
+            : 'MintIQ could not read this PDF. Please upload a text-based PDF or CSV file.'
+        );
         return;
       }
+
       navigation.navigate('ImportReview', { items });
-    } catch {
-      Alert.alert('Import Failed', 'Could not read CSV file.');
+    } catch (error) {
+      if (error instanceof PdfImportError) {
+        showAlert('Import Failed', error.message);
+        return;
+      }
+      showAlert('Import Failed', 'Could not read file.');
     }
   };
 
   const headerRight = (
     <View style={styles.actions}>
-      <TouchableOpacity style={styles.actionBtn} onPress={handleImport}>
-        <Ionicons name="cloud-upload-outline" size={22} color={colors.mintDark} />
+      <TouchableOpacity style={styles.actionBtn} onPress={handleImport} activeOpacity={0.85}>
+        <Ionicons name="cloud-upload-outline" size={20} color={colors.signal} />
       </TouchableOpacity>
-      <TouchableOpacity style={styles.actionBtn} onPress={handleExport}>
-        <Ionicons name="share-outline" size={22} color={colors.mintDark} />
+      <TouchableOpacity style={styles.actionBtn} onPress={handleExport} activeOpacity={0.85}>
+        <Ionicons name="share-outline" size={20} color={colors.signal} />
       </TouchableOpacity>
     </View>
   );
@@ -103,8 +111,8 @@ export function HistoryScreen() {
           onSelect={setCategoryFilter}
         />
         <View style={styles.importHint}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.charcoalLight} />
-          <Text style={styles.importHintText}>Import & export CSV from the icons above</Text>
+          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.importHintText}>Import & export from the icons above</Text>
         </View>
         <FlatList
           data={filtered}
@@ -112,6 +120,7 @@ export function HistoryScreen() {
           renderItem={({ item }) => (
             <ExpenseListItem expense={item} onDelete={removeExpense} />
           )}
+          contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
               icon="receipt-outline"
@@ -127,18 +136,18 @@ export function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
+  container: { flex: 1, backgroundColor: colors.surfaceInk },
   content: { flex: 1, paddingHorizontal: spacing.md },
   actions: { flexDirection: 'row', gap: spacing.sm },
   actionBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    backgroundColor: colors.signalSoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(46, 230, 166, 0.28)',
   },
   importHint: {
     flexDirection: 'row',
@@ -146,5 +155,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: spacing.xs,
   },
-  importHintText: { ...typography.caption },
+  importHintText: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  list: { paddingBottom: 110 },
 });

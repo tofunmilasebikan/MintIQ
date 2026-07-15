@@ -1,9 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Category } from '../types';
-import { CATEGORIES } from '../types';
+import { Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Category, CATEGORIES } from '../types';
 import { CATEGORY_COLORS } from '../constants/categories';
-import { colors, radius, spacing, typography } from '../constants/theme';
+import { colors, fonts, radius, spacing } from '../constants/theme';
 
 interface CategoryPickerProps {
   selected: Category;
@@ -20,11 +19,21 @@ export function CategoryPicker({ selected, onSelect }: CategoryPickerProps) {
             key={cat}
             style={[
               styles.chip,
-              active && { backgroundColor: CATEGORY_COLORS[cat], borderColor: CATEGORY_COLORS[cat] },
+              active && {
+                backgroundColor: CATEGORY_COLORS[cat] + '33',
+                borderColor: CATEGORY_COLORS[cat],
+              },
             ]}
             onPress={() => onSelect(cat)}
           >
-            <Text style={[styles.chipText, active && styles.chipTextActive]}>{cat}</Text>
+            <Text
+              style={[
+                styles.chipText,
+                active && { color: CATEGORY_COLORS[cat], fontFamily: fonts.sansSemiBold },
+              ]}
+            >
+              {cat}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -38,11 +47,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
-    backgroundColor: colors.creamDark,
+    backgroundColor: colors.surfaceMist,
     borderWidth: 1,
     borderColor: colors.border,
     marginRight: spacing.sm,
   },
-  chipText: { ...typography.caption, color: colors.charcoal, fontWeight: '500' },
-  chipTextActive: { color: colors.white, fontWeight: '600' },
+  chipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
 });

@@ -19,15 +19,17 @@ import { InputField } from '../components/InputField';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { EmptyState } from '../components/EmptyState';
 import { Card } from '../components/Card';
-import { Category, GoalType, GoalRecurrence } from '../types';
+import { Category, Goal, GoalType, GoalRecurrence } from '../types';
 import { getMonthKey } from '../utils/format';
 import { getDefaultCategoryForGoalType, isGoalCompleted, computeGoalProgress } from '../utils/goalProgress';
-import { colors, spacing, typography, radius } from '../constants/theme';
+import { confirmAction, showAlert } from '../utils/confirm';
+import { colors, fonts, spacing, typography, radius } from '../constants/theme';
 
 export function GoalsScreen() {
-  const { goals, expenses, addGoal, editGoal, removeGoal } = useApp();
+  const { goals, expenses, addGoal, editGoal, removeGoal, removeGoals } = useApp();
   const [modalVisible, setModalVisible] = useState(false);
-  const [carryOverGoal, setCarryOverGoal] = useState<number | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
@@ -46,6 +48,10 @@ export function GoalsScreen() {
     () => goals.filter((g) => g.status === 'carried_over'),
     [goals]
   );
+  const editableGoals = useMemo(
+    () => [...activeGoals, ...carriedGoals],
+    [activeGoals, carriedGoals]
+  );
 
   const resetForm = () => {
     setName('');
@@ -57,15 +63,40 @@ export function GoalsScreen() {
     setLinkSavings(false);
   };
 
+  const exitEditMode = () => {
+    setIsEditMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleEditMode = () => {
+    if (isEditMode) exitEditMode();
+    else setIsEditMode(true);
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const openCreate = () => {
+    if (isEditMode) exitEditMode();
     resetForm();
     setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    resetForm();
   };
 
   const handleSave = async () => {
     const target = parseFloat(targetAmount);
     if (!name.trim() || isNaN(target) || target <= 0) {
-      Alert.alert('Invalid Goal', 'Please enter a name and valid target amount.');
+      showAlert('Invalid Goal', 'Please enter a name and valid target amount.');
       return;
     }
     await addGoal({
@@ -79,8 +110,18 @@ export function GoalsScreen() {
       recurrence,
       linkSavingsTransactions: goalType === 'savings' && linkSavings,
     });
-    setModalVisible(false);
-    resetForm();
+    closeModal();
+  };
+
+  const handleDeleteSelected = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    const label = ids.length === 1 ? 'this goal' : `${ids.length} goals`;
+    confirmAction('Delete Goals', `Remove ${label}?`, async () => {
+      await removeGoals(ids);
+      exitEditMode();
+    });
   };
 
   const handleCarryOver = async (goalId: number, action: 'continue' | 'modify' | 'replace') => {
@@ -95,9 +136,7 @@ export function GoalsScreen() {
         name: goal.name,
         targetAmount: goal.targetAmount,
         currentAmount:
-          goal.goalType === 'savings' || goal.goalType === 'debt'
-            ? progress
-            : 0,
+          goal.goalType === 'savings' || goal.goalType === 'debt' ? progress : 0,
         goalType: goal.goalType,
         category: goal.category,
         month: nextMonth,
@@ -105,53 +144,89 @@ export function GoalsScreen() {
         recurrence: goal.recurrence,
         linkSavingsTransactions: goal.linkSavingsTransactions,
       });
-    } else if (action === 'modify') {
-      setCarryOverGoal(goalId);
-      setName(goal.name);
-      setTargetAmount(String(goal.targetAmount));
-      setCurrentAmount(String(goal.currentAmount));
-      setGoalType(goal.goalType);
-      setCategory(goal.category ?? 'Savings');
-      setRecurrence(goal.recurrence);
-      setLinkSavings(goal.linkSavingsTransactions);
-      setModalVisible(true);
-    } else {
+    } else if (action === 'replace') {
       await editGoal(goalId, { status: 'completed' });
       openCreate();
     }
-    setCarryOverGoal(null);
   };
 
-  const showCarryOverPrompt = (goal: typeof goals[0]) => {
+  const showCarryOverPrompt = (goal: Goal) => {
     Alert.alert(
       'Goal Not Completed',
       `"${goal.name}" wasn't completed for ${goal.month}. What would you like to do?`,
       [
         { text: 'Continue Next Month', onPress: () => handleCarryOver(goal.id, 'continue') },
-        { text: 'Modify Goal', onPress: () => handleCarryOver(goal.id, 'modify') },
         { text: 'Replace with New', onPress: () => handleCarryOver(goal.id, 'replace') },
+        {
+          text: 'Delete Goal',
+          style: 'destructive',
+          onPress: () =>
+            confirmAction('Delete Goal', `Remove "${goal.name}"?`, () => removeGoal(goal.id)),
+        },
         { text: 'Dismiss', style: 'cancel' },
       ]
     );
   };
 
+  const renderGoal = (g: Goal, showCarryLink?: boolean) => (
+    <View key={g.id}>
+      <GoalCard
+        goal={g}
+        expenses={expenses}
+        selectionMode={isEditMode}
+        selected={selectedIds.has(g.id)}
+        onToggleSelect={() => toggleSelect(g.id)}
+      />
+      {!isEditMode && showCarryLink && g.recurrence === 'monthly' && !isGoalCompleted(g, expenses) ? (
+        <TouchableOpacity onPress={() => showCarryOverPrompt(g)}>
+          <Text style={styles.carryLink}>Manage at month end →</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <ScreenHeader
         title="Goals"
-        subtitle="Track savings & spending targets"
+        subtitle={isEditMode ? 'Select goals to delete' : 'Track savings & spending targets'}
         right={
-          <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
-            <Ionicons name="add" size={24} color={colors.white} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.headerBtn, isEditMode && styles.headerBtnActive]}
+              onPress={toggleEditMode}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={isEditMode ? 'close' : 'create-outline'}
+                size={18}
+                color={isEditMode ? colors.ink : colors.signal}
+              />
+              {!isEditMode ? <Text style={styles.headerBtnLabel}>Edit</Text> : null}
+            </TouchableOpacity>
+            {!isEditMode ? (
+              <TouchableOpacity style={styles.addBtn} onPress={openCreate} activeOpacity={0.85}>
+                <Ionicons name="add" size={22} color={colors.ink} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         }
       />
+
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {carriedGoals.length > 0 ? (
+        {isEditMode && editableGoals.length === 0 ? (
+          <EmptyState
+            icon="flag-outline"
+            title="No goals to delete"
+            message="Add a goal first, or tap the close icon to exit edit mode."
+          />
+        ) : null}
+
+        {!isEditMode && carriedGoals.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Needs Attention</Text>
             {carriedGoals.map((g) => (
-              <Card key={g.id} style={styles.carryCard}>
+              <Card key={g.id} variant="ghost" style={styles.carryCard}>
                 <Text style={styles.carryText}>{g.name} was carried over from {g.month}</Text>
                 <Button title="Review Options" variant="secondary" onPress={() => showCarryOverPrompt(g)} />
               </Card>
@@ -159,36 +234,61 @@ export function GoalsScreen() {
           </View>
         ) : null}
 
-        {activeGoals.length === 0 ? (
+        {isEditMode ? (
+          <>
+            {carriedGoals.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Carried Over</Text>
+                {carriedGoals.map((g) => renderGoal(g))}
+              </View>
+            ) : null}
+            {activeGoals.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Active Goals</Text>
+                {activeGoals.map((g) => renderGoal(g))}
+              </View>
+            ) : null}
+          </>
+        ) : activeGoals.length === 0 ? (
           <EmptyState
             icon="flag-outline"
             title="No active goals"
             message="Set a savings target or spending limit to track your progress."
           />
         ) : (
-          activeGoals.map((g) => (
-            <View key={g.id}>
-              <GoalCard goal={g} expenses={expenses} />
-              {g.recurrence === 'monthly' && !isGoalCompleted(g, expenses) ? (
-                <TouchableOpacity onPress={() => showCarryOverPrompt(g)}>
-                  <Text style={styles.carryLink}>Manage at month end →</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ))
+          activeGoals.map((g) => renderGoal(g, true))
         )}
-        <View style={{ height: 100 }} />
+
+        <View style={{ height: isEditMode ? 120 : 100 }} />
       </ScrollView>
+
+      {isEditMode ? (
+        <View style={styles.editBar}>
+          <Text style={styles.selectedCount}>
+            {selectedIds.size} selected
+          </Text>
+          <Button
+            title="Delete"
+            variant="danger"
+            onPress={handleDeleteSelected}
+            disabled={selectedIds.size === 0}
+            style={styles.deleteBtn}
+          />
+        </View>
+      ) : null}
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{carryOverGoal ? 'Modify Goal' : 'New Goal'}</Text>
-            <TouchableOpacity onPress={() => { setModalVisible(false); setCarryOverGoal(null); }}>
-              <Ionicons name="close" size={24} color={colors.charcoal} />
+            <View>
+              <Text style={styles.modalKicker}>Create</Text>
+              <Text style={styles.modalTitle}>New Goal</Text>
+            </View>
+            <TouchableOpacity onPress={closeModal} style={styles.modalClose}>
+              <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.modalBody}>
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
             <InputField label="Goal Name" value={name} onChangeText={setName} placeholder="Trip fund" />
             <InputField
               label="Target Amount"
@@ -238,8 +338,8 @@ export function GoalsScreen() {
                 <Switch
                   value={linkSavings}
                   onValueChange={setLinkSavings}
-                  trackColor={{ true: colors.mint, false: colors.border }}
-                  thumbColor={colors.white}
+                  trackColor={{ true: colors.signal, false: colors.border }}
+                  thumbColor={colors.bone}
                 />
               </View>
             ) : null}
@@ -260,18 +360,7 @@ export function GoalsScreen() {
             </View>
 
             <Button title="Save Goal" onPress={handleSave} style={{ marginTop: spacing.lg }} />
-            {carryOverGoal ? (
-              <Button
-                title="Delete Goal"
-                variant="danger"
-                onPress={async () => {
-                  await removeGoal(carryOverGoal);
-                  setModalVisible(false);
-                  setCarryOverGoal(null);
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-            ) : null}
+            <View style={{ height: spacing.xxl }} />
           </ScrollView>
         </View>
       </Modal>
@@ -280,45 +369,107 @@ export function GoalsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
+  container: { flex: 1, backgroundColor: colors.surfaceInk },
   scroll: { paddingHorizontal: spacing.md },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.signalSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 230, 166, 0.28)',
+  },
+  headerBtnActive: {
+    backgroundColor: colors.signal,
+    borderColor: colors.signal,
+  },
+  headerBtnLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: colors.signal,
+  },
   addBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.mintDark,
+    borderRadius: radius.md,
+    backgroundColor: colors.signal,
     alignItems: 'center',
     justifyContent: 'center',
   },
   section: { marginBottom: spacing.md },
   sectionTitle: { ...typography.subheading, marginBottom: spacing.sm },
   carryCard: { marginBottom: spacing.sm },
-  carryText: { ...typography.body, marginBottom: spacing.sm },
-  carryLink: { ...typography.caption, color: colors.mintDark, marginBottom: spacing.md, marginTop: -8 },
-  modal: { flex: 1, backgroundColor: colors.cream },
+  carryText: { ...typography.body, marginBottom: spacing.sm, color: colors.textSecondary },
+  carryLink: {
+    ...typography.caption,
+    color: colors.signal,
+    marginBottom: spacing.md,
+    marginTop: -8,
+  },
+  editBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surfaceMist,
+  },
+  selectedCount: { ...typography.body, color: colors.textSecondary },
+  deleteBtn: { minWidth: 120 },
+  modal: { flex: 1, backgroundColor: colors.surfaceInk },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  modalTitle: { ...typography.heading },
+  modalKicker: {
+    ...typography.label,
+    color: colors.signal,
+    marginBottom: 2,
+  },
+  modalTitle: {
+    fontFamily: fonts.sansBold,
+    fontSize: 22,
+    color: colors.textPrimary,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMist,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalBody: { padding: spacing.md },
-  fieldLabel: { ...typography.label, marginBottom: spacing.sm, textTransform: 'uppercase' },
+  fieldLabel: { ...typography.label, marginBottom: spacing.sm },
   typeRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   typeChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMist,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  typeChipActive: { backgroundColor: colors.mintDark, borderColor: colors.mintDark },
-  typeText: { ...typography.caption, fontWeight: '600' },
-  typeTextActive: { color: colors.white },
+  typeChipActive: {
+    backgroundColor: colors.signalSoft,
+    borderColor: colors.signal,
+  },
+  typeText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  typeTextActive: { color: colors.signal },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

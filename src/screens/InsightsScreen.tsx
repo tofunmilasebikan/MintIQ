@@ -14,7 +14,7 @@ import {
 } from '../utils/analytics';
 import { generateInsights, getScoreExplanation } from '../utils/insights';
 import { formatCurrency } from '../utils/format';
-import { colors, spacing, typography } from '../constants/theme';
+import { colors, fonts, spacing, typography, radius } from '../constants/theme';
 
 export function InsightsScreen() {
   const { expenses, goals } = useApp();
@@ -43,48 +43,85 @@ export function InsightsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Insights" subtitle="Smart spending patterns" />
+      <ScreenHeader title="Insights" subtitle="Patterns behind your signal" />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Card style={styles.forecastCard} accent>
-          <Text style={styles.forecastLabel}>Projected Monthly Spending</Text>
+        <View style={styles.forecast}>
+          <Text style={styles.kicker}>Projected monthly</Text>
           <Text style={styles.forecastValue}>{formatCurrency(projected)}</Text>
           <Text style={styles.forecastSub}>
             Based on {formatCurrency(monthTotal)} spent so far this month
           </Text>
-        </Card>
+        </View>
 
-        <Text style={styles.sectionTitle}>Your Insights</Text>
-        {insights.map((insight) => (
-          <InsightCard key={insight.id} insight={insight} />
-        ))}
+        <Text style={styles.sectionTitle}>Your insights</Text>
+        {insights.length === 0 ? (
+          <Text style={styles.emptyInsights}>
+            Keep logging expenses — insights appear as patterns form.
+          </Text>
+        ) : (
+          insights.map((insight) => <InsightCard key={insight.id} insight={insight} />)
+        )}
 
-        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>MintIQ Score Breakdown</Text>
-        <Card>
+        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>Score breakdown</Text>
+        <Card variant="mist">
           <View style={styles.scoreRow}>
-            <ScoreRing score={score.total} size={80} />
+            <ScoreRing score={score.total} size={96} label="Score" />
             <View style={styles.scoreDetails}>
               {scoreLines.map((line, i) => (
-                <Text key={i} style={styles.scoreLine}>{line}</Text>
+                <Text key={i} style={styles.scoreLine}>
+                  {line}
+                </Text>
               ))}
             </View>
           </View>
         </Card>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.cream },
+  container: { flex: 1, backgroundColor: colors.surfaceInk },
   scroll: { paddingHorizontal: spacing.md },
-  forecastCard: { marginBottom: spacing.lg },
-  forecastLabel: { ...typography.label, textTransform: 'uppercase' },
-  forecastValue: { fontSize: 32, fontWeight: '700', color: colors.charcoal, marginVertical: spacing.xs },
-  forecastSub: { ...typography.caption },
-  sectionTitle: { ...typography.subheading, marginBottom: spacing.md },
+  forecast: {
+    marginBottom: spacing.xl,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceMist,
+    borderRadius: radius.lg,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.signal,
+  },
+  kicker: {
+    ...typography.label,
+    color: colors.signal,
+    marginBottom: spacing.xs,
+  },
+  forecastValue: {
+    fontFamily: fonts.displayBold,
+    fontSize: 40,
+    color: colors.textPrimary,
+    letterSpacing: -1,
+  },
+  forecastSub: {
+    ...typography.caption,
+    marginTop: spacing.sm,
+  },
+  sectionTitle: {
+    ...typography.heading,
+    marginBottom: spacing.md,
+  },
+  emptyInsights: {
+    ...typography.caption,
+    marginBottom: spacing.md,
+  },
   scoreRow: { flexDirection: 'row', alignItems: 'flex-start' },
   scoreDetails: { flex: 1, marginLeft: spacing.md },
-  scoreLine: { ...typography.caption, lineHeight: 20, marginBottom: spacing.sm },
+  scoreLine: {
+    ...typography.caption,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
 });
